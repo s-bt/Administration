@@ -2,23 +2,17 @@
 .DESCRIPTION
 Get service, scheduled tasks and IIS application pools that run with a specific user
 Get members of the local administrator group (RID 544)
-Get the firewall status
-Get the operating system
-Get TCP listening connections and also show the process names and corresponding service displayname
-Get UDPconnections and also show the process names and corresponding service displayname
 Write the output into a CLIXML file for later reporting
-PARTS OF THIS SCRIPT ARE MODIFIED FOR GERMAN OS ONLY, SO YOU MIGHT NEED TO ADAPT IT
-
 .AUTHOR
 Sebastian Bammer-Tasch
-Parts of the script are borrowed from 'Get-Dependencies.ps1'
+Parts of the script are borrowed from the passwordstate script 'Get-Dependencies.ps1'
 #>
 
 Write-Host "Start"
-$outHT = @{'WindowsServices'=$null;'IISApplicationPools'=$null;'ScheduleTasks'=$null;'LocalAdmins'=$null;'TCPListeners'=$null;'UDPListeners'=$null}
-$NetBiosDomainName = "MyDomainNetBiosName"
+$outHT = @{'WindowsServices'=$null;'IISApplicationPools'=$null;'ScheduleTasks'=$null;'LocalAdmins'=$null;'TCPListeners'=$null;'UDPListeners'=$null;FirewallStatus=$null;OS=$null}
+
 $Generaloutcol = New-Object System.Collections.ArrayList
-$SERVERNAME = "SERVER1"
+
 #region Windows Services
 
 Write-Host "Checking Windows services"
@@ -111,7 +105,7 @@ if ($schtask) {
                             $outObjNew.Username = $UserName
                         }
                     }
-                if ($UserName -like "*$NetBiosDomainName*") {
+                if ($UserName -like '*DOMAIN1*') {
                     [void]$Generaloutcol.Add($outObjNew)
                     [void]$outCol.Add($outObj)	
                 }
@@ -120,7 +114,7 @@ if ($schtask) {
             Write-Host "Error checking task" -ForegroundColor Red
         }
     }
-    $ErrorActionPreference = $E
+    $ErrorActionPreference = $EOP
     $outHT.'ScheduleTasks'=$outCol
 }
 #endregion Scheduled Tasks
@@ -136,13 +130,13 @@ try {
     }
 } catch {}
 
-#Foreach ($i in @(net.exe localgroup administrators | ?{$_ -like "*$NetBiosDomainName*" -and $_ -ne "$NetBiosDomainName\Domänen-Admins" -and $_ -notmatch "(T|Tier).*"})) {
+#Foreach ($i in @(net.exe localgroup administrators | ?{$_ -like '*DOMAIN1*' -and $_ -ne 'DOMAIN1\Domänen-Admins' -and $_ -notmatch "(T|Tier).*"})) {
 Foreach ($i in @(net.exe localgroup administrators) |?{$_ -notmatch "^(\s|\t|-|Der Befehl|Mitglieder|Aliasname|Beschreibung).*" -and ($_.Length -ne 0)}) {
     $outObjNew = New-Object -TypeName PSObject -Property @{DisplayName=$i;Username=$i;type="LocalAdmins";Computername=$env:COMPUTERNAME}
     [void]$Generaloutcol.Add($outObjNew)
 }
 
-#Foreach ($i in @(net.exe localgroup administratoren | ?{$_ -like "*$NetBiosDomainName*" -and $_ -ne "$NetBiosDomainName\Domänen-Admins" -and $_ -notmatch "(T|Tier).*"})) {
+#Foreach ($i in @(net.exe localgroup administratoren | ?{$_ -like '*DOMAIN1*' -and $_ -ne 'DOMAIN1\Domänen-Admins' -and $_ -notmatch "(T|Tier).*"})) {
 Foreach ($i in @(net.exe localgroup administratoren) |?{$_ -notmatch "^(\s|\t|-|Der Befehl|Mitglieder|Aliasname|Beschreibung).*" -and ($_.Length -ne 0)}) {
     $outObjNew = New-Object -TypeName PSObject -Property @{DisplayName=$i;Username=$i;type="LocalAdmins";Computername=$env:COMPUTERNAME}
     [void]$Generaloutcol.Add($outObjNew)
@@ -153,8 +147,9 @@ $outHT.LocalAdmins = $OutCol
 
 #region firewall status
 Write-Host "Checking Firewall status"
-$outObjNew = New-Object -TypeName PSObject -Property @{DisplayName=((netsh advfirewall show domain  | sls status).ToString().Replace('Status','').Replace(" ",""));Username="$NetBiosDomainName\$($env:COMPUTERNAME)";type="Firewallstatus";Computername=$env:COMPUTERNAME}
+$outObjNew = New-Object -TypeName PSObject -Property @{DisplayName=((netsh advfirewall show domain  | sls status).ToString().Replace('Status','').Replace(" ",""));Username="DOMAIN1\$($env:COMPUTERNAME)";type="Firewallstatus";Computername=$env:COMPUTERNAME}
 [void]$Generaloutcol.Add($outObjNew)
+$outHT.FirewallStatus = $outObjNew
 #endregion firewall status
 
 
@@ -162,6 +157,7 @@ $outObjNew = New-Object -TypeName PSObject -Property @{DisplayName=((netsh advfi
 Write-Host "Checking Operating System"
 $outObjNew = New-Object -TypeName PSObject -Property @{Username=$env:COMPUTERNAME;type="OS";displayname=(Get-WmiObject Win32_Operatingsystem -Property caption).caption;Computername=$env:COMPUTERNAME}
 [void]$Generaloutcol.Add($outObjNew)
+$outHT.OS = $outObjNew
 #endregion os
 
 
@@ -238,7 +234,7 @@ $outHT.UDPListeners
 
 
 write-host "Done"
-Export-Clixml -InputObject $outHT -Path "\\$($SERVERNAME)\WindowsComputerInfos`$\$($env:COMPUTERNAME).clixml" -Force
+Export-Clixml -InputObject $outHT -Path "\\SERVER1\WindowsComputerInfos`$\$($env:COMPUTERNAME).clixml" -Force
 
-del "\\$($SERVERNAME)\WindowsComputerInfos`$\$($env:COMPUTERNAME).csv" -ErrorAction SilentlyContinue -Force
-$Generaloutcol | Export-Csv -Path  "\\$($SERVERNAME)\WindowsComputerInfos`$\$($env:COMPUTERNAME).csv" -NoClobber -NoTypeInformation -Force
+del "\\SERVER1\WindowsComputerInfos`$\$($env:COMPUTERNAME).csv" -ErrorAction SilentlyContinue -Force
+$Generaloutcol | Export-Csv -Path  "\\SERVER1\WindowsComputerInfos`$\$($env:COMPUTERNAME).csv" -NoClobber -NoTypeInformation -Force
